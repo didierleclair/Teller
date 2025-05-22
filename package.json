@@ -1,13 +1,17 @@
 {
-  "name": "trax-bezoekersteller-backend",
+  "name": "teller-backend",
   "version": "1.0.0",
-  "description": "WebSocket server voor bezoekersregistratie op Trax Festival",
+  "description": "WebSocket teller backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.18.2",
     "ws": "^8.13.0"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
