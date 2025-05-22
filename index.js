@@ -1,4 +1,4 @@
-// Node.js backend met WebSocket voor realtime synchronisatie
+// Node.js backend met WebSocket en reset endpoint
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -19,7 +19,6 @@ function broadcastCounts() {
 }
 
 wss.on('connection', (ws) => {
-  // Initiele data verzenden
   ws.send(JSON.stringify({ type: 'update', in: countIn, out: countOut }));
 
   ws.on('message', (message) => {
@@ -32,6 +31,14 @@ wss.on('connection', (ws) => {
       console.error('Fout bij verwerken bericht:', e);
     }
   });
+});
+
+// Extra endpoint om te resetten
+app.post('/reset', (req, res) => {
+  countIn = 0;
+  countOut = 0;
+  broadcastCounts();
+  res.status(200).send('Reset uitgevoerd');
 });
 
 const PORT = process.env.PORT || 3000;
