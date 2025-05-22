@@ -1,4 +1,4 @@
-// index.js – aangepaste backend met cumulatieve opslag voor grafiek
+// index.js – backend met bundeling van tellingen per minuut
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -12,17 +12,28 @@ app.use(express.json());
 
 let countIn = 0;
 let countOut = 0;
-const history = []; // [{ timestamp, in: totaal, out: totaal, net: totaal }]
+const history = []; // [{ timestamp, in, out, net }]
+
+let bufferIn = 0;
+let bufferOut = 0;
+
+function flushBuffer() {
+  if (bufferIn === 0 && bufferOut === 0) return;
+  countIn += bufferIn;
+  countOut += bufferOut;
+  const timestamp = new Date().toISOString();
+  history.push({ timestamp, in: countIn, out: countOut, net: countIn - countOut });
+  bufferIn = 0;
+  bufferOut = 0;
+  broadcastAll();
+}
+
+setInterval(flushBuffer, 60 * 1000); // elke minuut bundelen
 
 function broadcastAll() {
   const payload = JSON.stringify({
     type: 'sync',
-    history: history.map(entry => ({
-      timestamp: entry.timestamp,
-      in: entry.in,
-      out: entry.out,
-      net: entry.net
-    }))
+    history
   });
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -32,25 +43,13 @@ function broadcastAll() {
 }
 
 wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({
-    type: 'sync',
-    history
-  }));
+  ws.send(JSON.stringify({ type: 'sync', history }));
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      const now = new Date().toISOString();
-
-      if (data.type === 'in') {
-        countIn++;
-      } else if (data.type === 'out') {
-        countOut++;
-      }
-
-      const net = countIn - countOut;
-      history.push({ timestamp: now, in: countIn, out: countOut, net });
-      broadcastAll();
+      if (data.type === 'in') bufferIn++;
+      else if (data.type === 'out') bufferOut++;
     } catch (err) {
       console.error('WebSocket-verwerkingsfout:', err);
     }
@@ -60,6 +59,8 @@ wss.on('connection', (ws) => {
 app.post('/reset', (req, res) => {
   countIn = 0;
   countOut = 0;
+  bufferIn = 0;
+  bufferOut = 0;
   history.length = 0;
   broadcastAll();
   res.status(200).json({ message: 'Teller gereset' });
