@@ -1,4 +1,4 @@
-// index.js – backend met bundeling van tellingen per minuut
+// index.js – backend met bundeling van tellingen per minuut én batch-ondersteuning
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -50,6 +50,10 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(message);
       if (data.type === 'in') bufferIn++;
       else if (data.type === 'out') bufferOut++;
+      else if (data.type === 'batch') {
+        if (typeof data.in === 'number') bufferIn += data.in;
+        if (typeof data.out === 'number') bufferOut += data.out;
+      }
     } catch (err) {
       console.error('WebSocket-verwerkingsfout:', err);
     }
