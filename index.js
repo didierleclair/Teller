@@ -1,4 +1,4 @@
-// Node.js backend met WebSocket en persistente historiek
+// Nieuwe backend met correcte opslag van individuele tellingen per actie
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -12,14 +12,12 @@ app.use(express.json());
 
 let countIn = 0;
 let countOut = 0;
-const history = []; // [{ timestamp, in, out }]
+const history = []; // [{ timestamp, deltaIn, deltaOut, net }]
 
 function broadcastAll() {
   const payload = JSON.stringify({
     type: 'sync',
-    history,
-    in: countIn,
-    out: countOut
+    history
   });
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -31,23 +29,27 @@ function broadcastAll() {
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
     type: 'sync',
-    history,
-    in: countIn,
-    out: countOut
+    history
   }));
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
       const now = new Date().toISOString();
-      if (data.type === 'in') countIn++;
-      if (data.type === 'out') countOut++;
-      if (data.type === 'in' || data.type === 'out') {
-        history.push({ timestamp: now, in: countIn, out: countOut });
+
+      if (data.type === 'in') {
+        countIn++;
+        history.push({ timestamp: now, deltaIn: 1, deltaOut: 0, net: countIn - countOut });
+        broadcastAll();
+      }
+
+      if (data.type === 'out') {
+        countOut++;
+        history.push({ timestamp: now, deltaIn: 0, deltaOut: 1, net: countIn - countOut });
         broadcastAll();
       }
     } catch (err) {
-      console.error('Fout bij WebSocket-bericht:', err);
+      console.error('Fout bij verwerken WebSocket-bericht:', err);
     }
   });
 });
