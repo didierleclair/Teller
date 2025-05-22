@@ -1,4 +1,4 @@
-// Nieuwe backend met correcte opslag van individuele tellingen per actie
+// index.js – aangepaste backend met cumulatieve opslag voor grafiek
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -12,12 +12,17 @@ app.use(express.json());
 
 let countIn = 0;
 let countOut = 0;
-const history = []; // [{ timestamp, deltaIn, deltaOut, net }]
+const history = []; // [{ timestamp, in: totaal, out: totaal, net: totaal }]
 
 function broadcastAll() {
   const payload = JSON.stringify({
     type: 'sync',
-    history
+    history: history.map(entry => ({
+      timestamp: entry.timestamp,
+      in: entry.in,
+      out: entry.out,
+      net: entry.net
+    }))
   });
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -39,17 +44,15 @@ wss.on('connection', (ws) => {
 
       if (data.type === 'in') {
         countIn++;
-        history.push({ timestamp: now, deltaIn: 1, deltaOut: 0, net: countIn - countOut });
-        broadcastAll();
+      } else if (data.type === 'out') {
+        countOut++;
       }
 
-      if (data.type === 'out') {
-        countOut++;
-        history.push({ timestamp: now, deltaIn: 0, deltaOut: 1, net: countIn - countOut });
-        broadcastAll();
-      }
+      const net = countIn - countOut;
+      history.push({ timestamp: now, in: countIn, out: countOut, net });
+      broadcastAll();
     } catch (err) {
-      console.error('Fout bij verwerken WebSocket-bericht:', err);
+      console.error('WebSocket-verwerkingsfout:', err);
     }
   });
 });
