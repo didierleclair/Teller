@@ -1,4 +1,4 @@
-// Node.js backend met WebSocket en reset endpoint
+// Volledige backendcode met WebSocket + resetfunctie
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -33,12 +33,11 @@ wss.on('connection', (ws) => {
   });
 });
 
-// Extra endpoint om te resetten
 app.post('/reset', (req, res) => {
   countIn = 0;
   countOut = 0;
   broadcastCounts();
-  res.status(200).send('Reset uitgevoerd');
+  res.status(200).json({ message: 'Teller en grafiek gereset', in: countIn, out: countOut });
 });
 
 const PORT = process.env.PORT || 3000;
