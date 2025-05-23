@@ -1,13 +1,13 @@
-// index.js – backend met Supabase REST-opslag via fetch
-const express = require('express');
-const http = require('http');
-const WebSocket = require('ws');
-const cors = require('cors');
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// index.js – Supabase backend met volledige ES module syntax
+import express from 'express';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import cors from 'cors';
+import fetch from 'node-fetch';
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocketServer({ noServer: true });
 
 app.use(cors());
 app.use(express.json());
@@ -35,7 +35,7 @@ async function getTelling() {
 function broadcast(data) {
   const message = JSON.stringify({ type: 'update', ...data });
   wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === 1) { // WebSocket.OPEN
       client.send(message);
     }
   });
