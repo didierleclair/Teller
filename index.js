@@ -1,4 +1,11 @@
 // index.js – eenvoudige backend met live sync via WebSocket
+server.on('upgrade', (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request);
+  });
+});
+
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
