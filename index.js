@@ -1,8 +1,9 @@
-// index.js – backend met bundeling van tellingen per minuut én batch-ondersteuning
+// index.js – eenvoudige backend met live sync via WebSocket
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -12,50 +13,33 @@ app.use(express.json());
 
 let countIn = 0;
 let countOut = 0;
-const history = []; // [{ timestamp, in, out, net }]
 
-let bufferIn = 0;
-let bufferOut = 0;
-
-function flushBuffer() {
-  if (bufferIn === 0 && bufferOut === 0) return;
-  countIn += bufferIn;
-  countOut += bufferOut;
-  const timestamp = new Date().toISOString();
-  history.push({ timestamp, in: countIn, out: countOut, net: countIn - countOut });
-  bufferIn = 0;
-  bufferOut = 0;
-  broadcastAll();
-}
-
-setInterval(flushBuffer, 60 * 1000); // elke minuut bundelen
-
-function broadcastAll() {
-  const payload = JSON.stringify({
-    type: 'sync',
-    history
+function broadcastCounts() {
+  const message = JSON.stringify({
+    type: 'update',
+    in: countIn,
+    out: countOut,
+    net: countIn - countOut
   });
+
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
+      client.send(message);
     }
   });
 }
 
 wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({ type: 'sync', history }));
+  ws.send(JSON.stringify({ type: 'update', in: countIn, out: countOut, net: countIn - countOut }));
 
-  ws.on('message', (message) => {
+  ws.on('message', (msg) => {
     try {
-      const data = JSON.parse(message);
-      if (data.type === 'in') bufferIn++;
-      else if (data.type === 'out') bufferOut++;
-      else if (data.type === 'batch') {
-        if (typeof data.in === 'number') bufferIn += data.in;
-        if (typeof data.out === 'number') bufferOut += data.out;
-      }
+      const data = JSON.parse(msg);
+      if (data.type === 'in') countIn++;
+      else if (data.type === 'out') countOut++;
+      broadcastCounts();
     } catch (err) {
-      console.error('WebSocket-verwerkingsfout:', err);
+      console.error('Fout bij verwerken bericht:', err);
     }
   });
 });
@@ -63,14 +47,11 @@ wss.on('connection', (ws) => {
 app.post('/reset', (req, res) => {
   countIn = 0;
   countOut = 0;
-  bufferIn = 0;
-  bufferOut = 0;
-  history.length = 0;
-  broadcastAll();
+  broadcastCounts();
   res.status(200).json({ message: 'Teller gereset' });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`WebSocket-server actief op poort ${PORT}`);
+  console.log(`Server actief op poort ${PORT}`);
 });
