@@ -1,10 +1,9 @@
-// index.js – backend met persistente opslag in JSON-bestand
+// index.js – backend met Supabase REST-opslag via fetch
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
 const server = http.createServer(app);
@@ -13,29 +12,22 @@ const wss = new WebSocket.Server({ noServer: true });
 app.use(cors());
 app.use(express.json());
 
-const dataFile = path.join(__dirname, 'tellingen.json');
+const SUPABASE_URL = 'https://okpazxteycdjicomewxd.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcGF6eHRleWNkamljb21ld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwMDQ4NzAsImV4cCI6MjA2MzU4MDg3MH0.lN-wzBlZFshayqSJvESJ-kS592ZumMcw8yM5Kl04Bso';
 
-let tellerData = { history: [] };
-
-function loadTellingen() {
-  if (fs.existsSync(dataFile)) {
-    try {
-      tellerData = JSON.parse(fs.readFileSync(dataFile));
-    } catch {
-      tellerData = { history: [] };
+async function getTelling() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
     }
-  }
-}
-
-function saveTellingen() {
-  fs.writeFileSync(dataFile, JSON.stringify(tellerData, null, 2));
-}
-
-function getTelling() {
+  });
+  const data = await res.json();
   let inCount = 0, outCount = 0;
-  tellerData.history.forEach(r => {
-    if (r.soort === 'in') inCount++;
-    else if (r.soort === 'out') outCount++;
+  data.forEach(row => {
+    if (row.soort === 'in') inCount++;
+    else if (row.soort === 'out') outCount++;
   });
   return { in: inCount, out: outCount, net: inCount - outCount };
 }
@@ -49,17 +41,25 @@ function broadcast(data) {
   });
 }
 
-wss.on('connection', (ws) => {
-  const current = getTelling();
+wss.on('connection', async (ws) => {
+  const current = await getTelling();
   ws.send(JSON.stringify({ type: 'update', ...current }));
 
-  ws.on('message', (msg) => {
+  ws.on('message', async (msg) => {
     try {
       const data = JSON.parse(msg);
       if (data.type === 'in' || data.type === 'out') {
-        tellerData.history.push({ soort: data.type, timestamp: new Date().toISOString() });
-        saveTellingen();
-        broadcast(getTelling());
+        await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([{ soort: data.type }])
+        });
+        const updated = await getTelling();
+        broadcast(updated);
       }
     } catch (err) {
       console.error('Fout bij verwerking:', err);
@@ -73,21 +73,37 @@ server.on('upgrade', (request, socket, head) => {
   });
 });
 
-app.post('/reset', (req, res) => {
-  tellerData = { history: [] };
-  saveTellingen();
-  broadcast(getTelling());
+app.post('/reset', async (req, res) => {
+  await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
+    method: 'DELETE',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    }
+  });
+  const current = await getTelling();
+  broadcast(current);
   res.status(200).json({ message: 'Teller gereset' });
 });
 
-app.get('/history', (req, res) => {
+app.get('/history', async (req, res) => {
+  const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp&order=timestamp.asc`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  const rows = await result.json();
   let inCount = 0;
   let outCount = 0;
-  const history = tellerData.history.map(entry => {
-    if (entry.soort === 'in') inCount++;
-    else if (entry.soort === 'out') outCount++;
+  const history = rows.map(row => {
+    if (row.soort === 'in') inCount++;
+    else if (row.soort === 'out') outCount++;
     return {
-      timestamp: entry.timestamp,
+      timestamp: row.timestamp,
       in: inCount,
       out: outCount,
       net: inCount - outCount
@@ -97,11 +113,10 @@ app.get('/history', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Teller backend actief met JSON-opslag.');
+  res.send('Teller backend actief via Supabase REST API.');
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  loadTellingen();
   console.log(`Server actief op poort ${PORT}`);
 });
