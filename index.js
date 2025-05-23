@@ -1,9 +1,10 @@
-// index.js – backend met PostgreSQL voor persistente telling
+// index.js – backend met persistente opslag in JSON-bestand
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
-const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -12,35 +13,31 @@ const wss = new WebSocket.Server({ noServer: true });
 app.use(cors());
 app.use(express.json());
 
-// PostgreSQL pool (vervang waarden door je echte databaseconfiguratie)
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://user:password@host:port/database',
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+const dataFile = path.join(__dirname, 'tellingen.json');
 
-async function setupDatabase() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS teller (
-      id SERIAL PRIMARY KEY,
-      soort TEXT NOT NULL CHECK (soort IN ('in', 'out')),
-      timestamp TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+let tellerData = { history: [] };
+
+function loadTellingen() {
+  if (fs.existsSync(dataFile)) {
+    try {
+      tellerData = JSON.parse(fs.readFileSync(dataFile));
+    } catch {
+      tellerData = { history: [] };
+    }
+  }
 }
 
-async function getTelling() {
-  const result = await pool.query(`
-    SELECT
-      COUNT(*) FILTER (WHERE soort = 'in') AS in,
-      COUNT(*) FILTER (WHERE soort = 'out') AS out
-    FROM teller
-  `);
-  const { in: inCount, out: outCount } = result.rows[0];
-  return {
-    in: parseInt(inCount, 10),
-    out: parseInt(outCount, 10),
-    net: parseInt(inCount, 10) - parseInt(outCount, 10)
-  };
+function saveTellingen() {
+  fs.writeFileSync(dataFile, JSON.stringify(tellerData, null, 2));
+}
+
+function getTelling() {
+  let inCount = 0, outCount = 0;
+  tellerData.history.forEach(r => {
+    if (r.soort === 'in') inCount++;
+    else if (r.soort === 'out') outCount++;
+  });
+  return { in: inCount, out: outCount, net: inCount - outCount };
 }
 
 function broadcast(data) {
@@ -52,17 +49,17 @@ function broadcast(data) {
   });
 }
 
-wss.on('connection', async (ws) => {
-  const current = await getTelling();
+wss.on('connection', (ws) => {
+  const current = getTelling();
   ws.send(JSON.stringify({ type: 'update', ...current }));
 
-  ws.on('message', async (msg) => {
+  ws.on('message', (msg) => {
     try {
       const data = JSON.parse(msg);
       if (data.type === 'in' || data.type === 'out') {
-        await pool.query('INSERT INTO teller (soort) VALUES ($1)', [data.type]);
-        const updated = await getTelling();
-        broadcast(updated);
+        tellerData.history.push({ soort: data.type, timestamp: new Date().toISOString() });
+        saveTellingen();
+        broadcast(getTelling());
       }
     } catch (err) {
       console.error('Fout bij verwerking:', err);
@@ -76,22 +73,21 @@ server.on('upgrade', (request, socket, head) => {
   });
 });
 
-app.post('/reset', async (req, res) => {
-  await pool.query('TRUNCATE teller');
-  const current = await getTelling();
-  broadcast(current);
+app.post('/reset', (req, res) => {
+  tellerData = { history: [] };
+  saveTellingen();
+  broadcast(getTelling());
   res.status(200).json({ message: 'Teller gereset' });
 });
 
-app.get('/history', async (req, res) => {
-  const result = await pool.query('SELECT * FROM teller ORDER BY timestamp ASC');
+app.get('/history', (req, res) => {
   let inCount = 0;
   let outCount = 0;
-  const history = result.rows.map(row => {
-    if (row.soort === 'in') inCount++;
-    else if (row.soort === 'out') outCount++;
+  const history = tellerData.history.map(entry => {
+    if (entry.soort === 'in') inCount++;
+    else if (entry.soort === 'out') outCount++;
     return {
-      timestamp: row.timestamp,
+      timestamp: entry.timestamp,
       in: inCount,
       out: outCount,
       net: inCount - outCount
@@ -101,11 +97,11 @@ app.get('/history', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Teller backend actief met PostgreSQL.');
+  res.send('Teller backend actief met JSON-opslag.');
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, async () => {
-  await setupDatabase();
+server.listen(PORT, () => {
+  loadTellingen();
   console.log(`Server actief op poort ${PORT}`);
 });
