@@ -1,4 +1,4 @@
-// index.js – Volledig compatibel met Render WebSocket + HTTP
+// index.js – Render backend met /history endpoint voor export
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -13,6 +13,7 @@ app.use(express.json());
 
 let countIn = 0;
 let countOut = 0;
+const history = [];
 
 function broadcastCounts() {
   const message = JSON.stringify({
@@ -29,18 +30,15 @@ function broadcastCounts() {
 }
 
 wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({
-    type: 'update',
-    in: countIn,
-    out: countOut,
-    net: countIn - countOut
-  }));
+  ws.send(JSON.stringify({ type: 'update', in: countIn, out: countOut, net: countIn - countOut }));
 
   ws.on('message', (msg) => {
     try {
       const data = JSON.parse(msg);
+      const now = new Date().toISOString();
       if (data.type === 'in') countIn++;
       else if (data.type === 'out') countOut++;
+      history.push({ timestamp: now, in: countIn, out: countOut, net: countIn - countOut });
       broadcastCounts();
     } catch (err) {
       console.error('Fout bij verwerken bericht:', err);
@@ -57,12 +55,17 @@ server.on('upgrade', (request, socket, head) => {
 app.post('/reset', (req, res) => {
   countIn = 0;
   countOut = 0;
+  history.length = 0;
   broadcastCounts();
   res.status(200).json({ message: 'Teller gereset' });
 });
 
+app.get('/history', (req, res) => {
+  res.json({ history });
+});
+
 app.get('/', (req, res) => {
-  res.send('Teller backend is actief.');
+  res.send('Teller backend actief.');
 });
 
 const PORT = process.env.PORT || 3000;
