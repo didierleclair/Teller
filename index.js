@@ -48,7 +48,8 @@ wss.on('connection', async (ws) => {
   ws.on('message', async (msg) => {
     try {
       const data = JSON.parse(msg);
-      if (data.type === 'in' || data.type === 'out') {
+      const actie = data.actie;
+if (actie === 'in' || actie === 'out') {
   await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
     method: 'POST',
     headers: {
@@ -56,7 +57,7 @@ wss.on('connection', async (ws) => {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify([{ soort: data.type }])
+    body: JSON.stringify([{ soort: actie }])
   });
 
   const updated = await getTelling();
