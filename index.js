@@ -49,18 +49,25 @@ wss.on('connection', async (ws) => {
     try {
       const data = JSON.parse(msg);
       if (data.type === 'in' || data.type === 'out') {
-        await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
-          method: 'POST',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify([{ soort: data.type }])
-        });
-        const updated = await getTelling();
-        broadcast(updated);
-      }
+  await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify([{ soort: data.type }])
+  });
+
+  const updated = await getTelling();
+
+  // ⬅️ Stuur naar de verzender
+  ws.send(JSON.stringify({ type: 'update', ...updated }));
+
+  // ⬅️ Stuur naar alle andere clients
+  broadcast(updated);
+}
+
     } catch (err) {
       console.error('Fout bij verwerking:', err);
     }
