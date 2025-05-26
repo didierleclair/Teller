@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const SUPABASE_URL = 'https://okpazxteycdjicomewxd.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcGF6eHRleWNkamljb21ld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwMDQ4NzAsImV4cCI6MjA2MzU4MDg3MH0.lN-wzBlZFshayqSJvESJ-kS592ZumMcw8yM5Kl04Bso';
+const SUPABASE_KEY = '...'; // jouw sleutel hier
 
 async function getTelling() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp`, {
@@ -49,26 +49,21 @@ wss.on('connection', async (ws) => {
     try {
       const data = JSON.parse(msg);
       const actie = data.actie;
-if (actie === 'in' || actie === 'out') {
-  await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify([{ soort: actie }])
-  });
+      if (actie === 'in' || actie === 'out') {
+        await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify([{ soort: actie }])
+        });
 
-  const updated = await getTelling();
-
-  // ⬅️ Stuur naar de verzender
-  ws.send(JSON.stringify({ type: 'update', ...updated }));
-
-  // ⬅️ Stuur naar alle andere clients
-  broadcast(updated);
-}
-
+        const updated = await getTelling();
+        ws.send(JSON.stringify({ type: 'update', ...updated }));
+        broadcast(updated);
+      }
     } catch (err) {
       console.error('Fout bij verwerking:', err);
     }
@@ -128,7 +123,15 @@ app.get('/', (req, res) => {
   res.send('Teller backend actief via Supabase REST API.');
 });
 
+// ✅ SELF-PING: houd Render wakker
 const PORT = process.env.PORT || 3000;
+setInterval(() => {
+  fetch(`http://localhost:${PORT}/`)
+    .then(res => res.text())
+    .then(txt => console.log("Self-ping OK:", txt))
+    .catch(err => console.warn("Self-ping mislukt:", err));
+}, 14 * 60 * 1000); // elke 14 minuten
+
 server.listen(PORT, () => {
   console.log(`Server actief op poort ${PORT}`);
 });
