@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const SUPABASE_URL = 'https://okpazxteycdjicomewxd.supabase.co';
-const SUPABASE_KEY = '...'; // jouw sleutel hier
+const SUPABASE_KEY = '...'; // ← jouw sleutel hier
 
 async function getTelling() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp`, {
@@ -23,7 +23,20 @@ async function getTelling() {
       'Content-Type': 'application/json'
     }
   });
-  const data = await res.json();
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    console.error("Ongeldige JSON van Supabase in getTelling()");
+    return { in: 0, out: 0, net: 0 };
+  }
+
+  if (!Array.isArray(data)) {
+    console.error("Supabase gaf geen array terug in getTelling():", data);
+    return { in: 0, out: 0, net: 0 };
+  }
+
   let inCount = 0, outCount = 0;
   data.forEach(row => {
     if (row.soort === 'in') inCount++;
@@ -49,6 +62,7 @@ wss.on('connection', async (ws) => {
     try {
       const data = JSON.parse(msg);
       const actie = data.actie;
+
       if (actie === 'in' || actie === 'out') {
         await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
           method: 'POST',
@@ -103,7 +117,19 @@ app.get('/history', async (req, res) => {
       'Content-Type': 'application/json'
     }
   });
-  const rows = await result.json();
+
+  let rows = [];
+  try {
+    rows = await result.json();
+  } catch (e) {
+    console.error("Fout bij JSON in /history");
+  }
+
+  if (!Array.isArray(rows)) {
+    console.error("Supabase gaf geen array terug in /history:", rows);
+    rows = [];
+  }
+
   let inCount = 0;
   let outCount = 0;
   const history = rows.map(row => {
@@ -116,6 +142,7 @@ app.get('/history', async (req, res) => {
       net: inCount - outCount
     };
   });
+
   res.json({ history });
 });
 
@@ -123,14 +150,15 @@ app.get('/', (req, res) => {
   res.send('Teller backend actief via Supabase REST API.');
 });
 
-// ✅ SELF-PING: houd Render wakker
 const PORT = process.env.PORT || 3000;
+
+// Self-ping om Render wakker te houden
 setInterval(() => {
   fetch(`http://localhost:${PORT}/`)
     .then(res => res.text())
     .then(txt => console.log("Self-ping OK:", txt))
     .catch(err => console.warn("Self-ping mislukt:", err));
-}, 14 * 60 * 1000); // elke 14 minuten
+}, 14 * 60 * 1000);
 
 server.listen(PORT, () => {
   console.log(`Server actief op poort ${PORT}`);
