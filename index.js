@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const SUPABASE_URL = 'https://okpazxteycdjicomewxd.supabase.co';
-const SUPABASE_KEY = '...'; // ← jouw sleutel hier
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcGF6eHRleWNkamljb21ld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwMDQ4NzAsImV4cCI6MjA2MzU4MDg3MH0.lN-wzBlZFshayqSJvESJ-kS592ZumMcw8yM5Kl04Bso'; // ← jouw sleutel hier
 
 async function getTelling() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp`, {
