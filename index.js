@@ -13,7 +13,7 @@ app.use(cors());
 app.use(express.json());
 
 const SUPABASE_URL = 'https://okpazxteycdjicomewxd.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcGF6eHRleWNkamljb21ld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwMDQ4NzAsImV4cCI6MjA2MzU4MDg3MH0.lN-wzBlZFshayqSJvESJ-kS592ZumMcw8yM5Kl04Bso'; // ← jouw sleutel hier
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9rcGF6eHRleWNkamljb21ld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgwMDQ4NzAsImV4cCI6MjA2MzU4MDg3MH0.lN-wzBlZFshayqSJvESJ-kS592ZumMcw8yM5Kl04Bso';
 
 async function getTelling() {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?select=soort,timestamp`, {
@@ -95,18 +95,30 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 app.post('/reset', async (req, res) => {
-  await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
-    method: 'DELETE',
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation'
+  try {
+    const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?soort=neq.*`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      }
+    });
+
+    if (!result.ok) {
+      const text = await result.text();
+      console.error("Fout bij verwijderen:", text);
+      return res.status(500).json({ message: "Verwijderen mislukt", error: text });
     }
-  });
-  const current = await getTelling();
-  broadcast(current);
-  res.status(200).json({ message: 'Teller gereset' });
+
+    const current = await getTelling();
+    broadcast(current);
+    res.status(200).json({ message: 'Teller succesvol gereset' });
+  } catch (err) {
+    console.error("Fout bij reset:", err);
+    res.status(500).json({ message: 'Serverfout bij reset' });
+  }
 });
 
 app.get('/history', async (req, res) => {
@@ -152,7 +164,6 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-// Self-ping om Render wakker te houden
 setInterval(() => {
   fetch(`http://localhost:${PORT}/`)
     .then(res => res.text())
