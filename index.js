@@ -48,7 +48,7 @@ async function getTelling() {
 function broadcast(data) {
   const message = JSON.stringify({ type: 'update', ...data });
   wss.clients.forEach(client => {
-    if (client.readyState === 1) { // WebSocket.OPEN
+    if (client.readyState === 1) {
       client.send(message);
     }
   });
@@ -96,7 +96,7 @@ server.on('upgrade', (request, socket, head) => {
 
 app.post('/reset', async (req, res) => {
   try {
-    const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen`, {
+    const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?id=gt.0`, {
       method: 'DELETE',
       headers: {
         'apikey': SUPABASE_KEY,
