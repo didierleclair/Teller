@@ -96,7 +96,7 @@ server.on('upgrade', (request, socket, head) => {
 
 app.post('/reset', async (req, res) => {
   try {
-    const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?id=gt.0`, {
+    const result = await fetch(`${SUPABASE_URL}/rest/v1/tellingen?timestamp=not.is.null`, {
       method: 'DELETE',
       headers: {
         'apikey': SUPABASE_KEY,
